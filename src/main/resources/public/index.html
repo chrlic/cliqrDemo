@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Beer Shop</title>
+<style>
+.black_overlay {
+	display: none;
+	position: absolute;
+	top: 0%;
+	left: 0%;
+	width: 100%;
+	height: 100%;
+	background-color: black;
+	z-index: 1001;
+	-moz-opacity: 0.8;
+	opacity: .80;
+	filter: alpha(opacity = 80);
+}
+
+.white_content {
+	display: none;
+	position: absolute;
+	top: 25%;
+	left: 25%;
+	width: 50%;
+	height: 50%;
+	padding: 16px;
+	border: 16px solid orange;
+	border-radius: 30px;
+	background-color: white;
+	z-index: 1002;
+	overflow: auto;
+}
+
+.image {
+	margin-bottom: 40px;
+}
+
+.order {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	margin-right: -50%;
+	transform: translate(-50%, -50%);
+	text-align: center
+}
+
+.order_confirmation {
+	font-size: 200%;
+	text-align: center;
+	margin-bottom: 40px;
+}
+
+.small_font {
+	margin-top: 80px;
+	font-size: 80%;
+	text-align: center;
+}
+
+.order_button {
+	position: absolute;
+	left: 50%;
+	margin-right: -50%;
+	transform: translate(-50%, -50%);
+	text-align: center;
+	border-style: solid;
+	border-width: 1px;
+	border-color: black;
+	border-radius: 10px;
+	padding: 10px 10px;
+	background: #dddddd;
+	font-size: 200%;
+	cursor: pointer;
+	cursor: hand;
+}
+
+.perf_button {
+	position: absolute;
+	bottom: 10px;
+	left: 10px;
+	text-align: center;
+	font-size: 80%;
+	border-style: solid;
+	border-width: 1px;
+	border-color: black;
+	border-radius: 10px;
+	padding: 5px 5px;
+	background: #dddddd;
+	cursor: pointer;
+	cursor: hand;
+}
+
+.description {
+	font-size: 200%
+}
+
+div {
+	margin-bottom: 20px
+}
+
+body {
+    background-image:    url(sunny-background-1100.jpg);
+    background-size:     cover;
+    background-repeat:   no-repeat;
+}
+</style>
+
+<script>
+	function handleOrder() {
+		var json_upload = "json_order=" + JSON.stringify({
+			name : "John Rambo",
+			time : "2pm"
+		});
+		var xhttp = new XMLHttpRequest(); // new HttpRequest instance 
+		xhttp.open("POST", "/order");
+		xhttp.setRequestHeader("Content-Type",
+				"application/x-www-form-urlencoded");
+		xhttp.onreadystatechange = function() {
+			if (xhttp.readyState == 4 && xhttp.status == 200) {
+				var jsonResponse = JSON.parse(xhttp.responseText);
+				var orderCounter = jsonResponse.order;
+				var servedBy = jsonResponse.nodeId;
+				var orderConfirmation = "Your order is " + orderCounter + ". in a queue. Thank you.";
+				document.getElementById("order_message").innerHTML = orderConfirmation;
+				document.getElementById("order_processed_by").innerHTML="Order served by server " + servedBy;
+				document.getElementById('confirmation').style.display = 'block';
+				document.getElementById('fade').style.display = 'block'
+			}
+		};
+		xhttp.send(json_upload);
+
+	}
+
+	function closeConfirmation() {
+		document.getElementById('confirmation').style.display = 'none';
+		document.getElementById('fade').style.display = 'none'
+	}
+</script>
+</head>
+<body>
+	<div class="order">
+		<div class="description">Cisco beer. The best of the best.
+		<p>For the best.</div>
+		<div class="image">
+			<img src="beer-keg-logo-transparent-400.png" />
+		</div>
+		<div class="order_button" onclick="handleOrder()">Place an Order</div>
+	</div>
+	<div id="confirmation" class="white_content">
+		<div id="order_message" class="order_confirmation"></div>
+		<div class="order_button" onclick="closeConfirmation()">OK</div>
+		<div id="order_processed_by" class="small_font"></div>
+	</div>
+	<div id="fade" class="black_overlay"></div>
+	<div class="perf_button" onclick="window.open('/perf.html')">Performance Tester</div> 
+</body>
+</html>

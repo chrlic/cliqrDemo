@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Performance Tester</title>
+
+<link href="jquery.nstSlider.css" rel="stylesheet" type="text/css">
+<script src="jquery.js"></script>
+<script src="jquery.nstSlider.js"></script>
+<script src="jquery.ba-jqmq.js"></script>
+
+<script src="d3.min.js"></script>
+<script src="liquid-chart.js"></script>
+
+</head>
+<body>
+	<div class="header">Performance tester</div>
+	<table>
+		<tr>
+			<div class="nstSlider" data-range_min="0" data-range_max="60"
+				data-cur_min="0">
+				<div class="bar"></div>
+				<div class="leftGrip"></div>
+			</div>
+			<div class="leftLabel" />
+		</tr>
+		<tr>
+			<div class="padding"></div>
+		</tr>
+		<tr>
+			<td>Requests/sec</td>
+			<td>OK/sec</td>
+			<td>Errors/sec</td>
+			<td>Resp. time (ms)</td>
+		</tr>
+		<tr>
+			<td><div id="reqPerSec"></div></td>
+			<td><div id="okPerSec"></td>
+			<td><div id="errPerSec"></td>
+			<td><div id="respTimeMs"></td>
+		</tr>
+		<tr>
+			<div class="padding"></div>
+		</tr>
+	</table>
+
+<style>
+.header {
+	font-size: 200%;
+	margin-left: 20px;
+	margin-bottom: 20px;
+}
+.padding {
+	margin-bottom: 30px;
+}
+.graph {
+	padding: 20px;
+}
+.line {
+	fill: none;
+	stroke: #000;
+	stroke-width: 3;
+}
+.succ-line {
+	fill: none;
+	stroke: green;
+	stroke-width: 3;
+}
+.err-line {
+	fill: none;
+	stroke: red;
+	stroke-width: 1;
+}
+.tick line {
+	stroke: darkgrey;
+    opacity: 0.4;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+table, th, td {
+    border: 1px solid black;
+    padding: 10px;
+}
+tr:nth-child(even) {
+	background-color: #f2f2f2;
+}
+tr:nth-child(odd) {
+	background-color: #A9EBB1;
+}
+body {
+	background-color: #FFF4D6;
+}
+</style>
+	<div class="graph"></div>
+
+	<script>
+		var tps;
+		var url;
+		var batchSize;
+		var testEnabled = true;
+
+		var timerId;
+
+		var buckets = {
+			tps : 0,
+			succ : 0,
+			err : 0,
+			rt : 0
+		};
+		
+		//web socket request handling - start
+		var socket = new WebSocket("ws://" + location.host + "/wsorder");
+		var sMessageCounter = 0;
+		var sMessageMap = new Map();
+		var sMaxQueueDepth = 25;
+		
+		var sGetMessage = function() {
+			var msg = sMessageCounter++;
+			sMessageMap.set(msg, new Date().getTime());
+			return msg;
+		}
+		
+		var sRemoveMessage = function(msg) {
+			var timestamp = sMessageMap.get(msg);
+			var rt = new Date().getTime() - timestamp;
+			sMessageMap.delete(msg);
+			return rt;
+		}
+		
+		var sGetQueueDepth = function() {
+			return sMessageMap.size;
+		}
+		
+		var doWsRequest = function() {	
+			buckets.tps++;
+			if (sGetQueueDepth() < sMaxQueueDepth) {
+				socket.send(sGetMessage())		
+			} else {
+				buckets.err++;
+			}
+		}
+		
+		var handleWsResponse = function(event) {
+			var res = event.data;
+			var jsonResponse = JSON.parse(res);
+			var success = jsonResponse.status;
+			var msg = parseInt(jsonResponse.id);
+			var rt = sRemoveMessage(msg);
+			
+			if (success == "true") {
+				buckets.succ++;
+			} else {
+				buckets.err++;
+			}
+			buckets.rt += rt;
+			
+			console.log("Received " + msg + " status " + success + " rt:" + rt);
+		}
+
+		socket.onmessage = handleWsResponse;
+		//web socket request handling - end
+
+		var bucketTimerId = setInterval(
+			function() {
+				$('#reqPerSec').text(buckets.tps);
+				$('#okPerSec').text(buckets.succ);
+				$('#errPerSec').text(buckets.err);
+				$('#respTimeMs').text(Math.round(buckets.rt / (buckets.succ + buckets.err)));
+				chart.updateTps(buckets.tps);
+				chart.updateSucc(buckets.succ);
+				chart.updateErr(buckets.err);
+				chart.updateRt(buckets.rt / (buckets.succ + buckets.err));
+				buckets.tps = 0;
+				buckets.succ = 0;
+				buckets.err = 0;
+				buckets.rt = 0;
+		}, 1000);
+
+		
+		var doRequest = function() {
+			buckets.tps++;
+			$.ajax({
+				url: "/order", 
+				success: function(result, status, xhr) {
+			       		buckets.succ++;
+			       		console.log("Status: " + xhr.status);
+			    },
+		    	error: function(result, status, xhr) {
+		       		buckets.err++;
+		       		console.log("Status: " + xhr.status);
+		       	}
+			});
+			
+			console.log("TPS: " + buckets.tps + ", Success: " + buckets.succ + ", Error: " + buckets.err);
+		}
+		
+		var action = function(type, processor) {
+			var data = {
+				type : type,
+				processor : processor
+			}
+			return {
+				process : function() {
+					processor()
+				}
+			}
+		}
+
+		var q = $.jqmq({
+			delay : 1,
+			callback : function(action) {
+				action.process()
+				return false
+			},
+			complete : function() {
+				console.log("Queue emptied")
+			}
+		});
+
+		
+		var chart = liquidChart();
+		$('.nstSlider')
+				.nstSlider(
+						{
+							"left_grip_selector" : ".leftGrip",
+							"value_bar_selector" : ".bar",
+							"value_changed_callback" : function(cause,
+									leftValue, rightValue) {
+								var $container = $(this).parent(), g = 255 - 127 + leftValue, r = 255 - g, b = 0;
+								$container.find('.leftLabel').text("Requests/sec: " + leftValue);
+								console.log("Left Value changed: " + leftValue);
+								var setTpsAction = new action(
+										"changeTPS",
+										function() {
+											console
+													.log("Left Value changed via queue: "
+															+ leftValue);
+											tps = leftValue;
+											sMaxQueueDepth = Math.max(25, leftValue * 1.8);
+											if (timerId) {
+												clearInterval(timerId);
+											}
+											if (testEnabled && tps) { //reset timer for web requests
+												timerId = setInterval(
+														function() {
+															doWsRequest()
+														}, 1000 / tps);
+											}
+
+										})
+								q.add(setTpsAction);
+								$(this).find('.bar').css('background',
+										'rgb(' + [ r, g, b ].join(',') + ')');
+							}
+						});
+	</script>
+</body>
+</html>

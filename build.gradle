@@ -1,0 +1,155 @@
+plugins {
+	id 'com.github.johnrengelman.shadow' version '1.2.3'
+}
+
+apply plugin: 'java'
+apply plugin: 'groovy'
+apply plugin: 'eclipse'
+apply plugin: 'application'
+
+sourceCompatibility = 1.5
+version = '1.0'
+jar {
+    manifest {
+        attributes 'Implementation-Title': 'Gradle Quickstart',
+                   'Implementation-Version': version,
+				   'Class-Path': '.'
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile group: 'commons-collections', name: 'commons-collections', version: '3.2'
+	compile "org.elasticsearch:elasticsearch:2.3.0"
+	compile "org.elasticsearch.module:lang-groovy:2.3.0"
+	compile group: 'org.codehaus.groovy', name: 'groovy-all', version: '2.4.3'
+//	compile "org.elasticsearch:elasticsearch-lang-groovy:2.2.0"
+	compile "com.sparkjava:spark-core:2.5"
+//	compile 'io.advantageous.qbit:qbit-admin:1.6.0.RELEASE'
+//	compile 'io.advantageous.qbit:qbit-vertx:1.6.0.RELEASE'
+	compile 'org.apache.httpcomponents:httpclient:4.5.2'
+	compile 'org.slf4j:slf4j-simple:1.6.1'
+	compile 'org.codehaus.gpars:gpars:1.2.1'
+//	compile 'com.sparkjava:spark-template-handlebars:2.3'
+    testCompile group: 'junit', name: 'junit', version: '4.+'
+}
+
+test {
+    systemProperties 'property': 'value'
+}
+
+uploadArchives {
+    repositories {
+       flatDir {
+           dirs 'repos'
+       }
+    }
+}
+
+def cliqrServices = "cliqr-services"
+def cliqrServicesSrc = "${cliqrServices}/src"
+def cliqrServicesBuild = "${cliqrServices}/build"
+
+shadowJar {
+	mainClassName = "cz.gargoyle.cliqr.demo.fe.FrontEnd"
+
+	mergeServiceFiles()
+
+	baseName = "BeerStore"
+	classifier = null
+	version = null
+}
+
+shadowJar {
+	mainClassName = "cz.gargoyle.cliqr.demo.es.ElasticSearchService"
+
+	mergeServiceFiles()
+
+	baseName = "ElasticSearch_2_3"
+	classifier = null
+	version = null
+}
+
+task beerStoreJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+	configurations = [project.configurations.compile]
+	from sourceSets.main.output
+	
+	mergeServiceFiles()
+	
+	mainClassName = "cz.gargoyle.cliqr.demo.fe.FrontEnd"
+	manifest {
+		attributes 'Implementation-Title': 'Gradle Quickstart',
+				   'Implementation-Version': version,
+				   'Class-Path': '.',
+				   'Main-Class': mainClassName
+	}
+
+	baseName = "BeerStore"
+	classifier = null
+	version = null
+  }
+
+task elasticSearchJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+	configurations = [project.configurations.compile]
+	from sourceSets.main.output
+	
+	mergeServiceFiles()
+	
+	mainClassName = "cz.gargoyle.cliqr.demo.es.ElasticSearchService"
+	manifest {
+		attributes 'Implementation-Title': 'Gradle Quickstart',
+				   'Implementation-Version': version,
+				   'Class-Path': '.',
+				   'Main-Class': mainClassName
+	}
+
+	baseName = "ElasticSearch_2_3"
+	classifier = null
+	version = null
+  }
+
+task copyBeerStore(type: Copy, dependsOn: beerStoreJar) {
+    from(file('build/libs/BeerStore.jar'))
+    into("${cliqrServicesSrc}/beer_store/bin")
+}
+
+
+task copyElasticSearch(type: Copy, dependsOn: elasticSearchJar) {
+    from(file('build/libs/ElasticSearch_2_3.jar'))
+    into("${cliqrServicesSrc}/elasticsearch_2_3/bin")
+}
+
+task beerStoreService(type: Zip, dependsOn: copyBeerStore) {
+	archiveName = 'beer_store.zip'
+	destinationDir = file('cliqr-services/build')
+	from ("${cliqrServicesSrc}") {
+		include 'beer_store/**'
+	}
+}
+
+task elasticSearchService(type: Zip, dependsOn: copyElasticSearch) {
+	archiveName = 'elasticsearch_2_3.zip'
+	destinationDir = file('cliqr-services/build')
+	from ("${cliqrServicesSrc}") {
+		include 'elasticsearch_2_3/**'
+	}
+}
+
+task haProxyService(type: Zip) {
+	archiveName = 'haproxy_adv.zip'
+	destinationDir = file('cliqr-services/build')
+	from ("${cliqrServicesSrc}") {
+		include 'haproxy_adv/**'
+	}
+}
+
+task buildAllJars(dependsOn: [beerStoreJar, elasticSearchJar]) {
+	
+}
+
+task buildAllServices(dependsOn: [beerStoreService, elasticSearchService, haProxyService]) {
+	
+}

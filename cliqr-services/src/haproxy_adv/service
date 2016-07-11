@@ -1,0 +1,261 @@
+#!/bin/bash
+
+# HAProxy configurator 
+exec > >(tee -a /usr/local/osmosix/logs/service.log) 2>&1
+
+OSSVC_HOME=/usr/local/osmosix/service
+. /usr/local/osmosix/etc/.osmosix.sh
+. /usr/local/osmosix/etc/userenv
+. $OSSVC_HOME/utils/cfgutil.sh
+. $OSSVC_HOME/utils/install_util.sh
+. $OSSVC_HOME/utils/os_info_util.sh
+
+cmd=$1
+SVCNAME="haproxy_adv"
+SVCHOME="$OSSVC_HOME/$SVCNAME"
+USER_ENV="/usr/local/osmosix/etc/userenv"
+
+
+# A map of os-name to installation-package
+declare -A haproxyPackages=(
+    ["Ubuntu"]="1.4.18-0*"
+    ["CentOS"]="haproxy"
+    ["RHEL"]="haproxy"
+)
+if [ ! -z $CUSTOM_REPO_URL ]; then
+    haproxyPackages["Ubuntu"]="1.4.18-0ubuntu1.2"
+    haproxyPackages["CentOS"]="haproxy"
+    haproxyPackages["RHEL"]="haproxy"
+fi
+cookiePrefix="LSW_WEB"
+serverPrefix="web"
+port=80
+serverIPs=""
+
+installHaproxy() {
+    log "[INSTALL] OS is : $os "
+    log "[INSTALL] Starting $SVCNAME installation"
+
+	log "[INSTALL] Start Package Update..."
+    preInstall "package-update"
+
+    log "[INSTALL] Start Install ..."
+    install $SVCNAME "$(declare -p haproxyPackages)"
+
+
+    if ([ $os == "CentOS" ] || [ $os == "RHEL" ])
+    then
+        log "[INSTALL] Won't set Enabled flag in non-existent file /etc/default/haproxy in CentOS or RHEL OS installations"
+    else
+        log "[INSTALL] Set Enabled to True in /etc/default/haproxy"
+        perl -pi -e 's/ENABLED=0/ENABLED=1/' /etc/default/haproxy
+    fi
+
+    
+    # Remove from rc.d service
+    log "[INSTALL] Remove from rc.d service ..."
+    if ([ $os == "CentOS" ] || [ $os == "RHEL" ])
+    then
+        postInstall chkconfig haproxy
+    else
+        postInstall update-rc haproxy
+    fi
+    
+    if [ $? -ne 0 ]
+    then
+        log "[INSTALL] Failed removing haproxy from service"
+        exit 1
+    fi
+    
+    # Stop the proxy service
+    /etc/init.d/haproxy status
+    /etc/init.d/haproxy stop
+}
+
+generateHAProxyConfig() {
+	HAPROXY_CONFIG="/etc/haproxy/haproxy.cfg"
+	cp $SVCHOME/etc/haproxy.cfg $HAPROXY_CONFIG
+	chmod 0644 $HAPROXY_CONFIG
+
+	if ([ $os == "CentOS" ] || [ $os == "RHEL" ])
+    then
+        log "For CentOS or RHEL create a softlink for the /usr/share/haproxy folder to /etc/haproxy/errors ..."
+        ln -s /usr/share/haproxy /etc/haproxy/errors
+        ls -lart /etc/haproxy/errors/
+    fi
+
+	#userenv might not have been dumped yet
+	source "$USER_ENV"
+	if [ -z "$OSSVC_CONFIG" ]; then
+		log "[CONFIGURATION] Waiting for the userenv to be available.."
+		waitForPropertyInFile "$USER_ENV" "OSSVC_CONFIG"
+		source "$USER_ENV"
+	fi
+
+    if [ ! -z $CliqrDependencies ]; then
+        serverIPs=""    
+        for j in $( echo $CliqrDependencies | tr "," "\n" )
+            do
+                dependentTier=CliqrTier_${j}_IP
+                if [ "$cliqrExternalHttpsEnabled" == 1 ]; then
+                    dependentTier="CliqrTier_${j}_IP"
+                fi
+                dependentTierIPs=${!dependentTier}
+                if [ ! -z "$dependentTierIPs" ]; then
+                    if [ ! -z "$serverIPs" ]; then
+                        serverIPs="$serverIPs,$dependentTierIPs"
+                    else
+                        serverIPs="$dependentTierIPs"
+                    fi
+                fi
+            done
+	elif [ ! -z "$CliqrTier_AppCluster_IP" ]; then
+		serverIPs="$CliqrTier_AppCluster_IP"
+	elif [ ! -z $CliqrTier_WebServer_IP ]; then
+		serverIPs="$CliqrTier_WebServer_IP"
+	fi
+
+
+	if [ ! -z "$serverIPs" ]; then
+		local serverDefs=""
+		local count=0
+
+		for ip in `echo $serverIPs|tr ',' ' '`     
+		do
+			count=$(( count+1 ))
+			log "[CONFIGURATION] Adding $ip "
+			newLine="server $serverPrefix$count $ip:$port cookie $cookiePrefix$count check"
+			if [ ! -z "$serverDefs" ]; then
+				serverDefs="$serverDefs\n\t$newLine"
+			else
+				serverDefs="$newLine"
+			fi
+		done
+		replaceToken $HAPROXY_CONFIG "%SERVER_DEFS%" "$serverDefs"
+	else
+
+		log "[CONFIGURATION] Missing ip addresses of web tier"
+		exit 1;
+	fi
+	#TODO: Add support for https once haproxy supports
+}
+
+
+
+startHAProxyService() {
+	/etc/init.d/haproxy start
+}
+
+stopHAProxyService() {
+	/etc/init.d/haproxy stop
+}
+
+restartHAProxyService() {
+	/etc/init.d/haproxy restart
+}
+
+reloadHAProxyService() {
+	/etc/init.d/haproxy reload
+}
+
+
+log() {
+	if [ -n "$USE_SERVICE_LOG"  -a "$USE_SERVICE_LOG" == "true" ];then
+	    echo "$*"
+	else
+		logger -t "OSMOSIX" "[$SVCNAME] $*"
+	fi
+}
+
+# main entry
+
+
+case $cmd in
+	install)
+		log "[INSTALL] Installing $SVCNAME"
+		installHaproxy
+		;;
+	deploy)
+		;;
+	configure)
+		log "[CONFIGURE] Configuring $SVCNAME"
+		generateHAProxyConfig
+		;;
+	start)
+	 	log "[START] Mounting storage volumes"
+            mountSharedStorages
+		log "[START] Invoking pre-start user script"
+		if [ ! -z "$cliqrUserScript" -a -f "$cliqrUserScript" ]; then
+			$cliqrUserScript 1 $cliqrUserScriptParams
+		fi
+
+		log "[START] Starting $SVCNAME"
+		startHAProxyService
+
+		log "[START] Invoking post-start user script"
+		if [ ! -z $cliqrUserScript -a -f $cliqrUserScript ]; then
+			$cliqrUserScript 2 $cliqrUserScriptParams
+		fi
+		
+		# Run restore script in case of migration
+        if [ "$appMigrating" == "true" ]; then
+        	runMigrationRestoreScript
+    	fi
+    	log "[START] $SVCNAME successfully started."
+		;;
+	stop)
+		log "[STOP] Invoking pre-stop user script"
+		if [ ! -z $cliqrUserScript -a -f $cliqrUserScript ]; then
+			$cliqrUserScript 3 $cliqrUserScriptParams
+		fi
+
+		log "[STOP] Stopping $SVCNAME"
+		stopHAProxyService
+
+		log "[STOP] Invoking post-stop user script"
+		if [ ! -z $cliqrUserScript -a -f $cliqrUserScript ]; then
+			$cliqrUserScript 4 $cliqrUserScriptParams
+		fi
+		log "[STOP] $SVCNAME successfully stopped."
+		;;
+	restart)
+		log "[RESTART] Invoking pre-restart user script"
+		if [ ! -z $cliqrUserScript -a -f $cliqrUserScript ]; then
+			$cliqrUserScript 5 $cliqrUserScriptParams
+		fi
+
+		log "[RESTART] Restarting $SVCNAME"
+		restartHAProxyService
+
+		log "[RESTART] Invoking post-restart user script"
+		if [ ! -z $cliqrUserScript -a -f $cliqrUserScript ]; then
+			$cliqrUserScript 6 $cliqrUserScriptParams
+		fi
+		;;
+	reload)
+		log "[RELOAD] Invoking pre-reload user script"
+		if [ ! -z $cliqrUserScript -a -f $cliqrUserScript ]; then
+			$cliqrUserScript 7 $cliqrUserScriptParams
+		fi
+
+		log "[RELOAD] Reloding $SVCNAME settings"
+		reloadHAProxyService
+
+		log "[RELOAD] Invoking post-reload user script"
+		if [ ! -z $cliqrUserScript -a -f $cliqrUserScript ]; then
+			$cliqrUserScript 8 $cliqrUserScriptParams
+		fi
+		log "[RELOAD] $SVCNAME successfully reloaded."
+		;;
+	cleanup)
+
+        ;;
+    upgrade)
+
+        ;;
+	*)
+		log "[ERROR] unknown command"
+		exit 127
+		;;
+esac
+
