@@ -152,5 +152,8 @@ task buildAllJars(dependsOn: [beerStoreJar, elasticSearchJar]) {
 
 task buildAllServices(dependsOn: [beerStoreService, elasticSearchService, haProxyService]) {
 	
+}
+
+task publishServices() {
 	println "Building with repository ${cliqrRepository}"
 }
