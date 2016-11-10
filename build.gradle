@@ -1,5 +1,6 @@
 plugins {
 	id 'com.github.johnrengelman.shadow' version '1.2.3'
+	id 'com.bmuschko.docker-java-application' version '3.0.3'
 }
 
 apply plugin: 'java'
@@ -155,5 +156,5 @@ task buildAllServices(dependsOn: [beerStoreService, elasticSearchService, haProx
 }
 
 task publishServices() {
-	println "Building with repository ${cliqrRepository}"
+	//println "Building with repository ${cliqrRepository}"
 }
