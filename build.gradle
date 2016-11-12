@@ -8,6 +8,9 @@ apply plugin: 'groovy'
 apply plugin: 'eclipse'
 apply plugin: 'application'
 
+import com.bmuschko.gradle.docker.tasks.container.*
+import com.bmuschko.gradle.docker.tasks.image.*
+
 sourceCompatibility = 1.5
 version = '1.0'
 jar {
@@ -36,6 +39,9 @@ dependencies {
 	compile 'org.codehaus.gpars:gpars:1.2.1'
 //	compile 'com.sparkjava:spark-template-handlebars:2.3'
     testCompile group: 'junit', name: 'junit', version: '4.+'
+	
+	compile 'com.kohlschutter.junixsocket:junixsocket-common:2.0.4'
+	compile 'com.kohlschutter.junixsocket:junixsocket-native-common:2.0.4'
 }
 
 test {
@@ -50,9 +56,14 @@ uploadArchives {
     }
 }
 
+docker {
+	url = "unix:///var/run/docker.sock"
+}
+
 def cliqrServices = "cliqr-services"
 def cliqrServicesSrc = "${cliqrServices}/src"
 def cliqrServicesBuild = "${cliqrServices}/build"
+def dockerImages = "docker-images"
 
 shadowJar {
 	mainClassName = "cz.gargoyle.cliqr.demo.fe.FrontEnd"
@@ -157,4 +168,44 @@ task buildAllServices(dependsOn: [beerStoreService, elasticSearchService, haProx
 
 task publishServices() {
 	//println "Building with repository ${cliqrRepository}"
+}
+
+task copyBeerStoreForContainer(type: Copy, dependsOn: beerStoreJar) {
+	from(file('build/libs/BeerStore.jar'))
+	into("${dockerImages}")
+}
+
+
+task copyElasticSearchForContainer(type: Copy, dependsOn: elasticSearchJar) {
+	from(file('build/libs/ElasticSearch_2_3.jar'))
+	into("${dockerImages}")
+}
+
+/*
+task beerStoreContainerImage(type: DockerBuildImage, dependsOn: copyBeerStoreForContainer) {
+	inputDir = file("${dockerImages}/beerStore")
+	tag = 'beer_store'
+}
+
+task elasticSearchContainerImage(type: DockerBuildImage, dependsOn: copyElasticSearchForContainer) {
+	inputDir = file("${dockerImages}/elasticsearch")
+	tag = 'elasticsearch'
+}
+*/
+
+task beerStoreContainerImage(type: Exec, dependsOn: copyBeerStoreForContainer) {
+	workingDir "${dockerImages}/beerStore"
+//	commandLine "/usr/local/bin/docker", "build", "-t", "beer_store", "."
+	executable "bash"
+//	args "-c", "docker build -t beer_store ."
+	args "-c", "env"
+}
+
+task elasticSearchContainerImage(type: Exec, dependsOn: copyElasticSearchForContainer) {
+	workingDir "${dockerImages}/elasticsearch"
+	commandLine "/usr/local/bin/docker", "build", "-t", "elasticsearch", "."
+}
+
+task buildAllContainerImages(dependsOn: [beerStoreContainerImage, elasticSearchContainerImage]) {
+	
 }
