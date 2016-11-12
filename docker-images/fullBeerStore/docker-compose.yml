@@ -1,0 +1,18 @@
+version: '2'
+services:
+  haproxy:
+    image: dockercloud/haproxy:1.5.3
+    links:
+    - beer_store
+    ports:
+    - "80:80"
+    - "1936:1936"
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  beer_store:
+    build: beerStore
+    links:
+    - elasticsearch:es
+  elasticsearch:
+    build: elasticsearch
+
