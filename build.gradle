@@ -172,13 +172,13 @@ task publishServices() {
 
 task copyBeerStoreForContainer(type: Copy, dependsOn: beerStoreJar) {
 	from(file('build/libs/BeerStore.jar'))
-	into("${dockerImages}")
+	into("${dockerImages}/beerStore")
 }
 
 
 task copyElasticSearchForContainer(type: Copy, dependsOn: elasticSearchJar) {
 	from(file('build/libs/ElasticSearch_2_3.jar'))
-	into("${dockerImages}")
+	into("${dockerImages}/elasticsearch")
 }
 
 /*
