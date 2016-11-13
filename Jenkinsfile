@@ -1,7 +1,8 @@
 node('master')
 {
     def version = 1.0
-    def gitUrl = 'https://github.com/chrlic/cliqrDemo'
+//    def gitUrl = 'https://github.com/chrlic/cliqrDemo'
+    def gitUrl = '/Users/mdivis/Documents/workspaceLuna/CliQrDemo/.git'
     def projectRoot = ""
     def group = "dashboard/frontend/"
     def artifactName = "dashboard_ui"
@@ -16,33 +17,15 @@ node('master')
 
         sh 'chmod +x gradlew'
         stage "test"
-        sh './gradlew clean test'
+        sh './gradlew clean buildAllServices'
 
         stage "build"
-        sh './gradlew build createPom'
+        sh './gradlew buildAllContainerImages'
 
- /*
-        stage "artifact"
-        def server = Artifactory.server('artifactory_dev01')
-        def uploadSpec = """{
-          "files": [
-            {
-              "pattern": "build/**.jar",
-              "target": "${artifactRepo}/$group/${artifactName}/${version}/${artifactName}-${version}.jar"
-            },
-            {
-              "pattern": "pom.xml",
-              "target": "${artifactRepo}/$group/${artifactName}/${version}/${artifactName}.pom"
-            }
-         ]
-        }"""
-        def buildInfo1 = server.upload spec: uploadSpec
-        server.publishBuildInfo buildInfo1
-        */
     }
 }
 
-
+/*
 node {
     echo "${env.JOB_URL}test/trend"
     // Mark the code checkout 'stage'....
@@ -62,4 +45,4 @@ node {
   		}
   	}
 }
-
+*/
