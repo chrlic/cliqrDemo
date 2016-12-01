@@ -264,3 +264,7 @@ task buildFullStoreCompose(type: Exec, dependsOn: [copyBeerStoreForCompose, copy
 	commandLine "${dockerComposeCommand}", "build"
 
 }
+
+task createC3Services () {
+	
+}
