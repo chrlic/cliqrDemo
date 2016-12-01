@@ -10,6 +10,8 @@ apply plugin: 'application'
 
 import com.bmuschko.gradle.docker.tasks.container.*
 import com.bmuschko.gradle.docker.tasks.image.*
+import org.gradle.internal.os.OperatingSystem;
+
 
 sourceCompatibility = 1.5
 version = '1.0'
@@ -24,6 +26,11 @@ jar {
 repositories {
     mavenCentral()
 }
+
+configurations {
+	ftpAntTask
+}
+
 
 dependencies {
     compile group: 'commons-collections', name: 'commons-collections', version: '3.2'
@@ -42,6 +49,9 @@ dependencies {
 	
 	compile 'com.kohlschutter.junixsocket:junixsocket-common:2.0.4'
 	compile 'com.kohlschutter.junixsocket:junixsocket-native-common:2.0.4'
+	
+//    ftpAntTask "org.apache.ant:ant-commons-net:1.7.0" 
+    ftpAntTask "org.apache.ant:ant-commons-net:1.9.7" 
 }
 
 test {
@@ -56,14 +66,13 @@ uploadArchives {
     }
 }
 
-docker {
-	url = "unix:///var/run/docker.sock"
-}
-
 def cliqrServices = "cliqr-services"
 def cliqrServicesSrc = "${cliqrServices}/src"
 def cliqrServicesBuild = "${cliqrServices}/build"
-def dockerImages = "docker-images"
+def dockerImages = "docker-images/individual"
+def dockerComposeImages = "docker-images/compose"
+def dockerCommand = OperatingSystem.current().isMacOsX() ? "/usr/local/bin/docker" : "docker"
+def dockerComposeCommand = OperatingSystem.current().isMacOsX() ? "/usr/local/bin/docker-compose" : "docker-compose"
 
 shadowJar {
 	mainClassName = "cz.gargoyle.cliqr.demo.fe.FrontEnd"
@@ -84,6 +93,14 @@ shadowJar {
 	classifier = null
 	version = null
 }
+
+
+ant {
+	taskdef(name: 'ftp',
+	classname: 'org.apache.tools.ant.taskdefs.optional.net.FTP',
+	classpath: configurations.ftpAntTask.asPath)
+}
+
 
 task beerStoreJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
 	configurations = [project.configurations.compile]
@@ -166,8 +183,44 @@ task buildAllServices(dependsOn: [beerStoreService, elasticSearchService, haProx
 	
 }
 
-task publishServices() {
-	//println "Building with repository ${cliqrRepository}"
+task publishStoreService(dependsOn: beerStoreService) << {
+
+	ant.ftp(action: 'put', server: c3_ftpRepositoryIp, userid: c3_ftpRepositoryUsername,
+	password: c3_ftpRepositoryPassword, verbose: true, depends: 'yes', binary: true,
+	remotedir: 'beer_store') {
+		fileset(dir: cliqrServicesBuild) {
+			include(name: 'beer_store.zip')
+		}
+	}
+
+}
+
+task publishElasticSearchService(dependsOn: elasticSearchService) << {
+
+	ant.ftp(action: 'put', server: c3_ftpRepositoryIp, userid: c3_ftpRepositoryUsername,
+	password: c3_ftpRepositoryPassword, verbose: true, depends: 'yes', binary: true,
+	remotedir: 'elasticsearch_2_3') {
+		fileset(dir: cliqrServicesBuild) {
+			include(name: 'elasticsearch_2_3.zip')
+		}
+	}
+
+}
+
+task publishHaProxyService(dependsOn: haProxyService) << {
+
+	ant.ftp(action: 'put', server: c3_ftpRepositoryIp, userid: c3_ftpRepositoryUsername,
+	password: c3_ftpRepositoryPassword, verbose: true, depends: true, binary: true,
+	remotedir: 'haproxy_adv') {
+		fileset(dir: cliqrServicesBuild) {
+			include(name: 'haproxy_adv.zip')
+		}
+	}
+
+}
+
+task publishServices(dependsOn: [publishStoreService, publishElasticSearchService, publishHaProxyService] ) {
+	println "Building with repository ${c3_ftpRepositoryIp}"
 }
 
 task copyBeerStoreForContainer(type: Copy, dependsOn: beerStoreJar) {
@@ -181,31 +234,33 @@ task copyElasticSearchForContainer(type: Copy, dependsOn: elasticSearchJar) {
 	into("${dockerImages}/elasticsearch")
 }
 
-/*
-task beerStoreContainerImage(type: DockerBuildImage, dependsOn: copyBeerStoreForContainer) {
-	inputDir = file("${dockerImages}/beerStore")
-	tag = 'beer_store'
-}
-
-task elasticSearchContainerImage(type: DockerBuildImage, dependsOn: copyElasticSearchForContainer) {
-	inputDir = file("${dockerImages}/elasticsearch")
-	tag = 'elasticsearch'
-}
-*/
-
 task beerStoreContainerImage(type: Exec, dependsOn: copyBeerStoreForContainer) {
 	workingDir "${dockerImages}/beerStore"
-//	commandLine "/usr/local/bin/docker", "build", "-t", "beer_store", "."
-	executable "bash"
-//	args "-c", "docker build -t beer_store ."
-	args "-c", "env"
+	commandLine "${dockerCommand}", "build", "-t", "beer_store", "."
 }
 
 task elasticSearchContainerImage(type: Exec, dependsOn: copyElasticSearchForContainer) {
 	workingDir "${dockerImages}/elasticsearch"
-	commandLine "/usr/local/bin/docker", "build", "-t", "elasticsearch", "."
+	commandLine "${dockerCommand}", "build", "-t", "elasticsearch", "."
 }
 
 task buildAllContainerImages(dependsOn: [beerStoreContainerImage, elasticSearchContainerImage]) {
 	
+}
+
+task copyBeerStoreForCompose(type: Copy, dependsOn: beerStoreJar) {
+	from(file('build/libs/BeerStore.jar'))
+	into("${dockerComposeImages}/fullBeerStore/beerStore")
+}
+
+
+task copyElasticSearchForCompose(type: Copy, dependsOn: elasticSearchJar) {
+	from(file('build/libs/ElasticSearch_2_3.jar'))
+	into("${dockerComposeImages}/fullBeerStore/elasticsearch")
+}
+
+task buildFullStoreCompose(type: Exec, dependsOn: [copyBeerStoreForCompose, copyElasticSearchForCompose]) {
+	workingDir "${dockerComposeImages}/fullBeerStore"
+	commandLine "${dockerComposeCommand}", "build"
+
 }

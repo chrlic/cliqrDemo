@@ -8,6 +8,7 @@ class CpuCruncher {
 		while ((startTime + ms > System.currentTimeMillis()) || (iterations < ms * 1000)) {
 			counter = (counter + 997) % 9999999
 			iterations++
+			
 		}
 		//println iterations
 	}
