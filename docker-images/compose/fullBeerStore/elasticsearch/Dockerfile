@@ -1,5 +1,5 @@
 #
-# beer store Dockerfile
+# elasticsearch Dockerfile
 #
 
 # Pull base image.
