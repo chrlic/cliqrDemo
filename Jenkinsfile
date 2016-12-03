@@ -8,7 +8,7 @@ node('master')
     def artifactName = "dashboard_ui"
     def artifactRepo = "ext-release-local"
 
-	println "Env Build Id: ${env.BUILD_ID}"
+	echo "Env Build Id: ${env.BUILD_ID}"
 
     stage "git"
 
