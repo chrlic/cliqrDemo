@@ -51,6 +51,7 @@ dependencies {
 	compile 'com.kohlschutter.junixsocket:junixsocket-native-common:2.0.4'
 	
 	compile 'cz.gargoyle:c3api:1.0'
+	
 //    ftpAntTask "org.apache.ant:ant-commons-net:1.7.0" 
     ftpAntTask "org.apache.ant:ant-commons-net:1.9.7" 
 }
@@ -301,3 +302,12 @@ task testContainerApp (dependsOn: runTestContainerApp) {
 	}
 }
 
+task testC3App(type:JavaExec, dependsOn: publishServices) {
+
+		main = 'cz.gargoyle.cliqr.demo.fe.TestC3App'
+		classpath = sourceSets.main.runtimeClasspath
+		classpath = classpath.add(sourceSets.test.runtimeClasspath)
+		
+		//classpath = "${cliqrServicesSrc}/beer_store/bin/BeerStore.jar"
+
+}
