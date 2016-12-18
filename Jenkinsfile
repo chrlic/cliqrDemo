@@ -18,10 +18,10 @@ node('master')
     {
 
         sh 'chmod +x gradlew'
-        stage "test"
+        stage "build services"
         sh './gradlew clean buildAllServices'
 
-        stage "build"
+        stage "build containers"
         sh './gradlew buildAllContainerImages'
 
     }

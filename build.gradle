@@ -12,7 +12,6 @@ import com.bmuschko.gradle.docker.tasks.container.*
 import com.bmuschko.gradle.docker.tasks.image.*
 import org.gradle.internal.os.OperatingSystem;
 
-
 sourceCompatibility = 1.5
 version = '1.0'
 jar {
@@ -25,6 +24,7 @@ jar {
 
 repositories {
     mavenCentral()
+	maven { url "https://raw.github.com/chrlic/CloudCenterJavaAPI/master/maven-repos" }
 }
 
 configurations {
@@ -36,7 +36,7 @@ dependencies {
     compile group: 'commons-collections', name: 'commons-collections', version: '3.2'
 	compile "org.elasticsearch:elasticsearch:2.3.0"
 	compile "org.elasticsearch.module:lang-groovy:2.3.0"
-	compile group: 'org.codehaus.groovy', name: 'groovy-all', version: '2.4.3'
+	compile group: 'org.codehaus.groovy', name: 'groovy-all', version: '2.4.7'
 //	compile "org.elasticsearch:elasticsearch-lang-groovy:2.2.0"
 	compile "com.sparkjava:spark-core:2.5"
 //	compile 'io.advantageous.qbit:qbit-admin:1.6.0.RELEASE'
@@ -50,6 +50,7 @@ dependencies {
 	compile 'com.kohlschutter.junixsocket:junixsocket-common:2.0.4'
 	compile 'com.kohlschutter.junixsocket:junixsocket-native-common:2.0.4'
 	
+	compile 'cz.gargoyle:c3api:1.0'
 //    ftpAntTask "org.apache.ant:ant-commons-net:1.7.0" 
     ftpAntTask "org.apache.ant:ant-commons-net:1.9.7" 
 }
@@ -265,6 +266,38 @@ task buildFullStoreCompose(type: Exec, dependsOn: [copyBeerStoreForCompose, copy
 
 }
 
-task createC3Services () {
-	
+task runTestContainerApp (type: Exec, dependsOn: buildFullStoreCompose) {
+	workingDir "${dockerComposeImages}/fullBeerStore"
+	commandLine "${dockerComposeCommand}", "up", "-d"
 }
+
+task sleepSeconds {
+	doLast {
+		sleep (20 * 1000)
+	}
+}
+
+task collectContainerLogs (type: Exec) {
+	workingDir "${dockerComposeImages}/fullBeerStore"
+	commandLine "${dockerComposeCommand}", "logs"
+}
+
+task stopTestContainerApp (type: Exec) {
+	workingDir "${dockerComposeImages}/fullBeerStore"
+	commandLine "${dockerComposeCommand}", "stop"
+}
+
+task testTransaction (type: Exec) {		
+	workingDir "${dockerComposeImages}/fullBeerStore"
+	commandLine "curl", "http://localhost/order"	
+}
+
+task testContainerApp (dependsOn: runTestContainerApp) {
+	doLast {
+		tasks.sleepSeconds.execute()
+		tasks.collectContainerLogs.execute()
+		tasks.testTransaction.execute()
+		tasks.stopTestContainerApp.execute()
+	}
+}
+
