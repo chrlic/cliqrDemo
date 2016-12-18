@@ -309,8 +309,5 @@ task testC3App(type:JavaExec, dependsOn: publishServices) {
 		classpath += sourceSets.test.runtimeClasspath
 		classpath += configurations.testRuntime
 		
-		classpath.each { println it }
-		
-		//classpath = "${cliqrServicesSrc}/beer_store/bin/BeerStore.jar"
-
+		//classpath.each { println it }
 }
