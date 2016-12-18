@@ -21,10 +21,10 @@ node('master')
         stage "build services"
         sh './gradlew clean buildAllServices'
 
-        stage "build containters"
-        sh './gradlew buildAllContainerImages'
+//        stage "build containters"
+//        sh './gradlew buildAllContainerImages'
 
-        stage "test containters"
+        stage "test application"
         sh './gradlew testC3App'
     }
 }

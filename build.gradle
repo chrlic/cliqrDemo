@@ -306,7 +306,10 @@ task testC3App(type:JavaExec, dependsOn: publishServices) {
 
 		main = 'cz.gargoyle.cliqr.demo.fe.TestC3App'
 		classpath = sourceSets.main.runtimeClasspath
-		classpath = classpath.add(sourceSets.test.runtimeClasspath)
+		classpath += sourceSets.test.runtimeClasspath
+		classpath += configurations.testRuntime
+		
+		classpath.each { println it }
 		
 		//classpath = "${cliqrServicesSrc}/beer_store/bin/BeerStore.jar"
 
